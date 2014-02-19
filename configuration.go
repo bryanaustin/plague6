@@ -89,9 +89,9 @@ func ParseInstructions(path string) ([]Walk, error) {
 			nw = append(nw, Walk{ moresteps })
 		}
 	} else {
-		for _, step := range tf.HttpSteps {
-			step.Compile()
-			nw = append(nw, Walk{ []IStep{ &step } })
+		for s := range tf.HttpSteps {
+			tf.HttpSteps[s].Compile()
+			nw = append(nw, Walk{ []IStep{ &tf.HttpSteps[s] } })
 		}
 	}
 
