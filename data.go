@@ -4,7 +4,6 @@ package main
 import (
 	"time"
 	"errors"
-	"fmt"
 )
 
 type WalkData struct {
@@ -33,20 +32,4 @@ func (rd *WalkData) SegmentAvarage(index int) (time.Duration, error) {
 		return 0, errors.New("Index outside of range")
 	}
 	return rd.SegmentTotals[index] / time.Duration(rd.SegmentFinish[index] + rd.SegmentFailed[index]), nil
-}
-
-
-func PrintResults() {
-	for d := range ako.Data {
-		if len(ako.Data) > 1 {
-			Message("Walk %d", d)
-		}
-		PrintData(ako.Data[d])
-	}
-}
-
-func PrintData(datas *WalkData) {
-	fmt.Printf("Successful: %d\n", datas.Successful)
-	fmt.Printf("Failed: %d\n", datas.Failed)
-	fmt.Printf("Avarage Response Time: %v\n", datas.AvarageIndividual())
 }

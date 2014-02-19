@@ -14,6 +14,7 @@ type AppConfig struct {
 	Concurrent int
 	Requests uint64
 	Time int
+	StatusInterval int
 	Walks []Walk
 }
 
@@ -52,11 +53,12 @@ type Header struct {
 
 func ParseArguments() []string {
 	ako.AppConfig = new(AppConfig)
-	flag.BoolVar(&ako.AppConfig.Quiet, "q", false, "supress messages")
+	flag.BoolVar(&ako.AppConfig.Quiet, "q", false, "supress messages (default false)")
 	flag.StringVar(&ako.AppConfig.Listen, "l", "", "listen on this addres for instructions")
-	flag.IntVar(&ako.AppConfig.Concurrent, "c", 1, "maximum concurrency")
-	flag.Uint64Var(&ako.AppConfig.Requests, "n", 0, "number of requests to make")
-	flag.IntVar(&ako.AppConfig.Time, "t", -1, "duration of time to send out requests")
+	flag.IntVar(&ako.AppConfig.Concurrent, "c", 1, "maximum concurrency (default 1)")
+	flag.Uint64Var(&ako.AppConfig.Requests, "n", 0, "number of requests to make (default 0)")
+	flag.IntVar(&ako.AppConfig.Time, "t", -1, "duration of time to send out requests (default -1)")
+	flag.IntVar(&ako.AppConfig.StatusInterval, "d", 333, "frequency status update in milliseconds (default 333)")
 	flag.Parse()
 	return flag.Args()
 }

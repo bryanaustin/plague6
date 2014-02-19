@@ -33,16 +33,21 @@ func main() {
 	for w := range ako.Walks {
 		var abort bool
 		var timeout <-chan time.Time
+		var stattime <-chan time.Time
+		statuspush := make(chan *StatusData, 1)
+		statusend := make(chan bool)
 		walkprocessor := make(chan *Result, 64) //This should be more than enough
 		if ako.AppConfig.Time > 0 {
 			timeout = time.After(time.Duration(ako.AppConfig.Time)*time.Second)
 		} else { timeout = nil }
+		stattime = time.After(1)
 		go Devastation(w, walkprocessor)
+		go StatusPrint(w, statuspush, statusend)
 		
 		for keepwalking := true; keepwalking; {
 			select {
 				case <- interchan:
-					Message("Attempting clean shutdown.")
+					Message(" Attempting clean shutdown.")
 					keepwalking = false
 				case <- timeout:
 					keepwalking = false
@@ -55,7 +60,9 @@ func main() {
 					walkprocessor <- result
 					ako.Data[w].Finished++
 				//TODO: Adaptive case
-				//TODO: Realtime feedback
+				case <-stattime:
+					statuspush <- &StatusData{ ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
+					stattime = time.After(time.Duration(ako.AppConfig.StatusInterval)*time.Millisecond)
 			}
 		}
 
@@ -73,7 +80,8 @@ func main() {
 				}
 			}
 		}
-
+		statuspush <- &StatusData{ ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
+		statusend <- true
 		walkprocessor <- nil
 		if abort { return }
 	}
