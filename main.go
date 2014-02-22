@@ -35,13 +35,15 @@ func main() {
 		var timeout <-chan time.Time
 		var stattime <-chan time.Time
 		statuspush := make(chan *StatusData, 1)
-		statusend := make(chan bool)
-		walkprocessor := make(chan *Result, 64) //This should be more than enough
+		statusend := make(chan *StatusData)
+		devastator := make(chan *ResultProcessing)
+		aftermath := make(chan bool)
+
 		if ako.AppConfig.Time > 0 {
 			timeout = time.After(time.Duration(ako.AppConfig.Time)*time.Second)
 		} else { timeout = nil }
 		stattime = time.After(1)
-		go Devastation(w, walkprocessor)
+		go Devastation(devastator, aftermath)
 		go StatusPrint(w, statuspush, statusend)
 		
 		for keepwalking := true; keepwalking; {
@@ -57,7 +59,7 @@ func main() {
 						keepwalking = ako.Data[w].Locusts < ako.AppConfig.Requests
 					}
 				case result := <-results:
-					walkprocessor <- result
+					devastator <- &ResultProcessing{ w, result }
 					ako.Data[w].Finished++
 				//TODO: Adaptive case
 				case <-stattime:
@@ -74,18 +76,19 @@ func main() {
 						finishwalk = false
 						abort = true
 					case result := <-results:
-						walkprocessor <- result
+						devastator <- &ResultProcessing{ w, result }
 						ako.Data[w].Finished++
 						finishwalk = ako.Data[w].Finished < ako.Data[w].Locusts
 				}
 			}
 		}
-		statuspush <- &StatusData{ ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
-		statusend <- true
-		walkprocessor <- nil
+		aftermath <- true
+		<-aftermath
+		statusend <- &StatusData{ ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
+		<-statusend
 		if abort { return }
 	}
-
+	
 	for killed := 0; killed < ako.AppConfig.Concurrent; {
 		select {
 			case <- interchan:
@@ -96,8 +99,5 @@ func main() {
 		}
 	}
 	
-	PrintResults()
+	// PrintResults()
 }
-
-
-func no(thing interface{}) {}
