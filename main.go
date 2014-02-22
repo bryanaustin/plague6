@@ -23,8 +23,12 @@ func main() {
 	if quit := SetupDataAndTest(); quit { return } //TODO: Add Interrupt
 	results := make(chan *Result)
 	admittance := make(chan int)
+	statuspush := make(chan *StatusData, 1)
+	statusend := make(chan *StatusData)
 	interchan := make(chan os.Signal, 1)
 	signal.Notify(interchan, os.Interrupt, os.Kill)
+
+	go StatusPrint(statuspush, statusend)
 
 	for x := 0; x < ako.AppConfig.Concurrent; x++ {
 		go Swarm(admittance, results)
@@ -34,8 +38,6 @@ func main() {
 		var abort bool
 		var timeout <-chan time.Time
 		var stattime <-chan time.Time
-		statuspush := make(chan *StatusData, 1)
-		statusend := make(chan *StatusData)
 		devastator := make(chan *ResultProcessing)
 		aftermath := make(chan bool)
 
@@ -44,7 +46,6 @@ func main() {
 		} else { timeout = nil }
 		stattime = time.After(1)
 		go Devastation(devastator, aftermath)
-		go StatusPrint(w, statuspush, statusend)
 		
 		for keepwalking := true; keepwalking; {
 			select {
@@ -63,7 +64,7 @@ func main() {
 					ako.Data[w].Finished++
 				//TODO: Adaptive case
 				case <-stattime:
-					statuspush <- &StatusData{ ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
+					statuspush <- &StatusData{ w, ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
 					stattime = time.After(time.Duration(ako.AppConfig.StatusInterval)*time.Millisecond)
 			}
 		}
@@ -84,11 +85,13 @@ func main() {
 		}
 		aftermath <- true
 		<-aftermath
-		statusend <- &StatusData{ ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
-		<-statusend
+		statusend <- &StatusData{ w, ako.Data[w].Successful, ako.Data[w].Failed, ako.Data[w].TotalDuration }
 		if abort { return }
 	}
-	
+
+	statusend <- nil
+	<-statusend
+
 	for killed := 0; killed < ako.AppConfig.Concurrent; {
 		select {
 			case <- interchan:

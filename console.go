@@ -7,6 +7,7 @@ import (
 )
 
 type StatusData struct {
+	Walk int
 	Successful uint64
 	Failure uint64
 	TotalDuration time.Duration
@@ -37,15 +38,15 @@ func PrintData(datas *WalkData) {
 	fmt.Printf("Avarage Response Time: %v\n", datas.AvarageIndividual())
 }
 
-func StatusPrint(walk int, statchan <-chan *StatusData, endchan chan *StatusData) {
+func StatusPrint(statchan <-chan *StatusData, endchan chan *StatusData) {
 	process := func(sd *StatusData) {
 		totalrequests := sd.Successful + sd.Failure
 		if totalrequests > 0 {
 			avarage := sd.TotalDuration / time.Duration(totalrequests)
 			fmt.Printf("\rWalk %d: Successful: %d, Failed: %d, Avarage Response: %s",
-				walk, sd.Successful, sd.Failure, avarage)
+				sd.Walk, sd.Successful, sd.Failure, avarage)
 		} else {
-			fmt.Printf("\rWalk %d: Starting...", walk)
+			fmt.Printf("\rWalk %d: Starting...", sd.Walk)
 		}
 	}
 	var sd *StatusData
@@ -54,10 +55,13 @@ func StatusPrint(walk int, statchan <-chan *StatusData, endchan chan *StatusData
 			case sd = <-statchan:
 				process(sd)
 			case sd = <-endchan:
-				process(sd)
-				fmt.Print("\n")
-				endchan <- nil
-				return
+				if sd != nil {
+					process(sd)
+					fmt.Print("\n")
+				} else {
+					endchan <- nil
+					return
+				}
 		}
 	}
 }
