@@ -79,7 +79,7 @@ func (wc *WalkContext) Run(interchan chan os.Signal) bool {
 	for keepwalking := true; keepwalking; {
 		select {
 			case <- interchan:
-				Message(" Attempting clean shutdown.")
+				Message("Attempting clean shutdown.")
 				return true
 			case <- wc.Timeout:
 				keepwalking = false
