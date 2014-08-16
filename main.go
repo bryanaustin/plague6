@@ -67,9 +67,9 @@ func InitWalk(w int) *WalkContext {
 
 func (wc *WalkContext) Setup() {
 	if ako.AppConfig.Slow > 0 {
+		wc.Swarms = 1
 		// go SwarmMeasure(wc.Walk, wc.Adjust)
 		go Swarm(wc.Admittance, wc.Results)
-		wc.Swarms = 1
 	} else {
 		wc.Swarms = ako.AppConfig.Concurrent
 		for x := 0; x < ako.AppConfig.Concurrent; x++ {
@@ -87,21 +87,31 @@ func (wc *WalkContext) Setup() {
 func (wc *WalkContext) Run(interchan chan os.Signal) bool {
 	for keepwalking := true; keepwalking; {
 		select {
+
+			// Signal interrupt 
 			case <- interchan:
-				Message("Attempting clean shutdown.")
+				Message("\nAttempting clean shutdown.")
 				return true
+			
+			// Timer end
 			case <-wc.Timeout:
 				keepwalking = false
+
+			// Start next
 			case wc.Admittance <- wc.Walk:
 				wc.Locusts++
 				if ako.AppConfig.Requests > 0 {
 					keepwalking = wc.Locusts < ako.AppConfig.Requests
 				}
+
+			// Finished
 			case result := <-wc.Results:
 				go func() {
 					wc.Devastator <- &ResultProcessing{ wc.Walk, result }
 				}()
 				wc.Finished++
+
+			// Change concurrency
 			case amount := <-wc.Adjust:
 				if amount < 0 {
 					keepwalking = false
@@ -111,6 +121,8 @@ func (wc *WalkContext) Run(interchan chan os.Signal) bool {
 					}
 				}
 				wc.Swarms += amount
+
+			// Print status
 			case <-wc.StatInterval:
 				wc.StatSend <- &StatusData{
 					wc.Walk,
@@ -128,10 +140,14 @@ func (wc *WalkContext) Finish(interchan chan os.Signal) bool {
 	if wc.Finished < wc.Locusts {
 		for finishwalk := true; finishwalk; {
 			select {
+
+				// Second interrupt
 				case <- interchan:
 					Message("Forced shutdown.")
 					finishwalk = false
 					return true
+
+				// Finished
 				case result := <-wc.Results:
 					wc.Devastator <- &ResultProcessing{ wc.Walk, result }
 					wc.Finished++
