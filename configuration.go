@@ -15,6 +15,7 @@ type AppConfig struct {
 	Concurrent int
 	Requests uint64
 	Time int
+	Slow int
 	StatusInterval int
 	Walks []Walk
 }
@@ -60,6 +61,7 @@ func ParseArguments() []string {
 	flag.IntVar(&ako.AppConfig.Concurrent, "c", 1, "maximum concurrency")
 	flag.Uint64Var(&ako.AppConfig.Requests, "n", 0, "number of requests to make")
 	flag.IntVar(&ako.AppConfig.Time, "t", -1, "duration of time to send out requests")
+	flag.IntVar(&ako.AppConfig.Slow, "slow", -1, "increase concurrency until this threshold in milliseconds is reached")
 	flag.IntVar(&ako.AppConfig.StatusInterval, "d", 333, "frequency status update in milliseconds")
 	flag.Parse()
 	return flag.Args()

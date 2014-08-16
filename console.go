@@ -8,6 +8,7 @@ import (
 
 type StatusData struct {
 	Walk int
+	Concurrency int
 	Successful uint64
 	Failure uint64
 	TotalDuration time.Duration
