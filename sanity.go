@@ -16,9 +16,7 @@ func DigestArgs(args []string) bool {
 }
 
 func SetupDataAndTest() bool {
-	ako.Data = make([]*WalkData, len(ako.Walks))
 	for i := range ako.Walks {
-		ako.Data[i] = new(WalkData)
 		for _, steps := range ako.Walks[i].Steps {
 			result := steps.Run()
 			if result.Problem != nil {

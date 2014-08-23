@@ -10,26 +10,23 @@ import (
 type AllKnowingOne struct {
 	AppConfig *AppConfig
 	Walks []Walk
-	Data []*WalkData
 }
 
 type WalkContext struct {
 	// Status
-	Finished uint64                   // Requests finished
-	Locusts uint64                    // Requests made
-	Swarms int                        // Active threads
 	Walk int                          // Walk number
+	Finished uint64                   // Requests finished
+	Processed uint64                  // Results processed
+	Started uint64                    // Requests made
 
+	// Objects
+	BlackBox *BlackBox                // Record and report damage
+	Swarm *Swarm                      // Manage all the workers
+	
 	// Channels
-	Adjust chan int                   // Checks response times and adjusts threads
-	Admittance chan int               // Start a single locast.
-	Aftermath chan bool               // For stopping devistator
-	Devastator chan *ResultProcessing // Does maths on results
-	Results chan *Result              // Channel for a locast to return a result
-	StatInterval <-chan time.Time     // Timeout for printing to console.
-	StatSend chan *StatusData         // Channel for sending status updates
-	StatEnd chan *StatusData          // Stop the status thread
 	Timeout <-chan time.Time          // Timeout to stop sending locasts.
+	StatInterval <-chan time.Time     // Timeout for printing to console.
+	Report chan *ProgressReport
 }
 
 var ako *AllKnowingOne
@@ -43,8 +40,8 @@ func main() {
 	interchan := make(chan os.Signal, 1)
 	signal.Notify(interchan, os.Interrupt)
 
-	for w := range ako.Walks {
-		walk := InitWalk(w)
+	for wi, wo := range ako.Walks {
+		walk := InitWalk(wi, wo)
 		walk.Setup()
 		if abort := walk.Run(interchan); abort { break }
 		if abort := walk.Finish(interchan); abort { break }
@@ -52,36 +49,27 @@ func main() {
 	}
 }
 
-func InitWalk(w int) *WalkContext {
+func InitWalk(index int, w Walk) *WalkContext {
 	wc := new(WalkContext)
-	wc.Walk = w
-	wc.Admittance = make(chan int)
-	wc.Aftermath = make(chan bool)
-	wc.Devastator = make(chan *ResultProcessing)
-	wc.Results = make(chan *Result)
+	wc.Walk = index
+	wc.BlackBox = InitBlackBox(string(index))
+	wc.Swarm = InitSwarm(&w)
 	wc.StatInterval = time.After(1)
-	wc.StatSend = make(chan *StatusData, 1)
-	wc.StatEnd = make(chan *StatusData)
+	wc.Report = make(chan *ProgressReport, 1)
 	return wc
 }
 
 func (wc *WalkContext) Setup() {
+	go wc.BlackBox.Start()
+	go StatusReporter(wc.Report, wc.BlackBox.Status)
 	if ako.AppConfig.Slow > 0 {
-		wc.Swarms = 1
-		// go SwarmMeasure(wc.Walk, wc.Adjust)
-		go Swarm(wc.Admittance, wc.Results)
+		wc.Swarm.SpawnLocust(1)
 	} else {
-		wc.Swarms = ako.AppConfig.Concurrent
-		for x := 0; x < ako.AppConfig.Concurrent; x++ {
-			go Swarm(wc.Admittance, wc.Results)
-		}
+		wc.Swarm.SpawnLocust(ako.AppConfig.Concurrent)
 		if ako.AppConfig.Time > 0 {
 			wc.Timeout = time.After(time.Duration(ako.AppConfig.Time)*time.Second)
 		}
 	}
-
-	go Devastation(wc.Devastator, wc.Aftermath)
-	go StatusPrint(wc.StatSend, wc.StatEnd)
 }
 
 func (wc *WalkContext) Run(interchan chan os.Signal) bool {
@@ -98,38 +86,29 @@ func (wc *WalkContext) Run(interchan chan os.Signal) bool {
 				keepwalking = false
 
 			// Start next
-			case wc.Admittance <- wc.Walk:
-				wc.Locusts++
+			case wc.Swarm.Allow <- wc.Walk:
+				wc.Started++
 				if ako.AppConfig.Requests > 0 {
-					keepwalking = wc.Locusts < ako.AppConfig.Requests
+					keepwalking = wc.Started < ako.AppConfig.Requests
 				}
 
 			// Finished
-			case result := <-wc.Results:
+			case result := <-wc.Swarm.Results:
 				go func() {
-					wc.Devastator <- &ResultProcessing{ wc.Walk, result }
+					wc.BlackBox.Intake <- result
+					wc.BlackBox.DoneWith <- true
 				}()
 				wc.Finished++
 
-			// Change concurrency
-			case amount := <-wc.Adjust:
-				if amount < 0 {
-					keepwalking = false
-				} else {
-					for s := 0; s < amount; s++ {
-						go Swarm(wc.Admittance, wc.Results)
-					}
-				}
-				wc.Swarms += amount
+			// Processed
+			case <-wc.BlackBox.DoneWith:
+				wc.Processed++
 
 			// Print status
 			case <-wc.StatInterval:
-				wc.StatSend <- &StatusData{
-					wc.Walk,
-					wc.Swarms,
-					ako.Data[wc.Walk].Successful, 
-					ako.Data[wc.Walk].Failed, 
-					ako.Data[wc.Walk].TotalDuration }
+				wc.BlackBox.Progress <- true
+				strrepr := IntToString(wc.Walk)
+				wc.Report <- &ProgressReport{ strrepr, wc.Swarm.Locusts }
 				wc.StatInterval = time.After(time.Duration(ako.AppConfig.StatusInterval)*time.Millisecond)
 		}
 	}
@@ -137,43 +116,37 @@ func (wc *WalkContext) Run(interchan chan os.Signal) bool {
 }
 
 func (wc *WalkContext) Finish(interchan chan os.Signal) bool {
-	if wc.Finished < wc.Locusts {
-		for finishwalk := true; finishwalk; {
+	if wc.Processed < wc.Started {
+		for cleaning := true; cleaning; {
 			select {
 
 				// Second interrupt
-				case <- interchan:
+				case <-interchan:
 					Message("Forced shutdown.")
-					finishwalk = false
+					cleaning = false
 					return true
 
 				// Finished
-				case result := <-wc.Results:
-					wc.Devastator <- &ResultProcessing{ wc.Walk, result }
+				case result := <-wc.Swarm.Results:
+					go func() {
+						wc.BlackBox.Intake <- result
+						wc.BlackBox.DoneWith <- true
+					}()
 					wc.Finished++
-					finishwalk = wc.Finished < wc.Locusts
+
+				// Processed
+				case <-wc.BlackBox.DoneWith:
+					wc.Processed++
+					cleaning = wc.Processed < wc.Started
 			}
 		}
 	}
-	wc.Aftermath <- true; <-wc.Aftermath
-	wc.StatEnd <- &StatusData{
-		wc.Walk,
-		wc.Swarms,
-		ako.Data[wc.Walk].Successful, 
-		ako.Data[wc.Walk].Failed, 
-		ako.Data[wc.Walk].TotalDuration }
-	wc.StatEnd <- nil; <-wc.StatEnd
+	NewLineYall()
 	return false
 }
 
 func (wc *WalkContext) Cleanup(interchan chan os.Signal) {
-	for killed := 0; killed < ako.AppConfig.Concurrent; {
-		select {
-			case <- interchan:
-				Message("Aborting cleanup.")
-				return
-			case wc.Admittance <- -1:
-				killed++
-		}
-	}
+	wc.Report <- nil
+	wc.Swarm.Exterminate()
+	wc.BlackBox.Stop()
 }

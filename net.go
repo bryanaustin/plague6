@@ -23,6 +23,7 @@ func AttemptListen() bool {
 }
 
 func ListenMaster(addr string) error {
+	//TODO: Recieve instructions from master
 	return nil
 }
 

@@ -5,29 +5,46 @@ import (
 	"time"
 )
 
+type Swarm struct {
+	Locusts int           // Active threads
+	Walk *Walk            // Test instructions
+	Allow chan int        // Send out a single locast.
+	Results chan *Result  // Channel for a locast to return a result
+}
+
 type Result struct {
 	Problem error
 	Duration time.Duration
 	Transferred uint64
 }
 
-type ResultProcessing struct {
-	Walk int
-	Result *Result
+
+func InitSwarm(w *Walk) *Swarm {
+	swarm := new(Swarm)
+	swarm.Walk = w
+	swarm.Allow = make(chan int)
+	swarm.Results = make(chan *Result)
+	return swarm
 }
 
-func Swarm(admit <-chan int, results chan<- *Result) {
-	var walk int
-	var trans uint64
-	var started time.Time
+func (s *Swarm) SpawnLocust(count int) {
+	for i := 0; i < count; i++ {
+		go locust(s)
+		s.Locusts++
+	}
+}
+
+// Perform actions for a single locast attack
+func locust(s *Swarm) {
 	var problem error
+	var trans uint64
 	for {
-		walk = <-admit
+		walk := <-s.Allow
 		if walk < 0 { return }
-		started = time.Now()
 		trans = 0
 		problem = nil
-		for _, step := range ako.Walks[walk].Steps {
+		started := time.Now()
+		for _, step := range s.Walk.Steps {
 			result := step.Run()
 			if result.Problem != nil {
 				problem = result.Problem
@@ -35,72 +52,13 @@ func Swarm(admit <-chan int, results chan<- *Result) {
 			}
 			trans += result.Transferred
 		}
-		results <- &Result{ problem, time.Now().Sub(started), trans }
+		duration := time.Now().Sub(started)
+		s.Results <- &Result{ problem, duration, trans }
 	}
 }
 
-func Devastation(results <-chan *ResultProcessing, aftermath chan bool) {
-	started := 0
-	themaster := make(chan *ResultProcessing)
-	ready := make(chan chan *ResultProcessing)
-	var result *ResultProcessing
-
-	go TheDevastator(themaster)
-
-	for issue := true; issue; {
-		select {
-			case result = <-results:
-				select {
-					case individual := <-ready:
-						individual <- result
-					default:
-						nc := make(chan *ResultProcessing)
-						go SomethingDevastating(ready, nc, themaster)
-						nc <- result
-						started++
-				}
-			case <-aftermath:
-				issue = false
-		}
-	}
-	for killed := 0; killed < started; killed++ {
-		readychan := <-ready
-		readychan <- nil
-	}
-	themaster <- nil
-	aftermath <- true
-}
-
-func SomethingDevastating(ready chan<- chan *ResultProcessing, feed, master chan *ResultProcessing) {
-	var process *ResultProcessing
-	for {
-		process = <-feed
-		if process == nil { return }
-		master <- process
-		ready <- feed
-	}
-}
-
-func TheDevastator(results <-chan *ResultProcessing) {
-	var process *ResultProcessing
-	for {
-		process = <-results
-		if process == nil {
-			return
-		}
-		datafocus := ako.Data[process.Walk]
-		if process.Result.Problem != nil {
-			datafocus.Failed++
-		} else {
-			datafocus.Successful++
-		}
-		if process.Result.Duration < datafocus.LowestDuration || datafocus.LowestDuration == 0 {
-			datafocus.LowestDuration = process.Result.Duration
-		}
-		if process.Result.Duration > datafocus.HighestDuration {
-			datafocus.HighestDuration = process.Result.Duration	
-		}
-		datafocus.TotalDuration += process.Result.Duration
-		datafocus.TotalTransferred += process.Result.Transferred
+func (s *Swarm) Exterminate() {
+	for dead := 0; dead < s.Locusts; dead++ {
+		s.Allow <- -1
 	}
 }
