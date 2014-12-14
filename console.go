@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 	"strconv"
 )
 
@@ -37,9 +36,8 @@ func IntToString(i int) string {
 func PrintStatus(pr *ProgressReport, br *BoxReport) {
 	totalrequests := br.Successful + br.Failed
 	if totalrequests > 0 {
-		avarage := br.Duration / time.Duration(totalrequests)
 		fmt.Printf("\rWalk %s: Concurrent: %d, Successful: %d, Failed: %d, Avarage Response: %s         ",
-			pr.Walk, pr.Concurrency, br.Successful, br.Failed, avarage)
+			pr.Walk, pr.Concurrency, br.Successful, br.Failed, br.Avarage)
 	} else {
 		fmt.Printf("\rWalk %s: Starting...", pr.Walk)
 	}

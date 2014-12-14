@@ -26,7 +26,7 @@ type WalkContext struct {
 	// Channels
 	Timeout <-chan time.Time          // Timeout to stop sending locasts.
 	StatInterval <-chan time.Time     // Timeout for printing to console.
-	Report chan *ProgressReport
+	Report chan *ProgressReport       // Change something up based on performance
 }
 
 var ako *AllKnowingOne

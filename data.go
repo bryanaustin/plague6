@@ -16,6 +16,7 @@ type BlackBox struct {
 	Started time.Time
 	RealDuration time.Duration
 	TotalTransferred uint64
+	Rolling *RollingAvarage
 
 	DoneWith chan bool
 	Intake chan *Result
@@ -27,7 +28,7 @@ type BoxReport struct {
 	Identifier string
 	Successful uint64
 	Failed uint64
-	Duration time.Duration
+	Avarage time.Duration
 }
 
 func InitBlackBox(identifier string) *BlackBox {
@@ -37,6 +38,7 @@ func InitBlackBox(identifier string) *BlackBox {
 	box.Intake = make(chan *Result)
 	box.Progress = make(chan bool, 1)
 	box.Status = make(chan *BoxReport)
+	box.Rolling = InitRollingAvarage(128)
 	return box
 }
 
@@ -48,6 +50,8 @@ func InitBlackBox(identifier string) *BlackBox {
 func (bb *BlackBox) Start() {
 	bb.Started = time.Now()
 	for {
+
+		// Prioritize progress channel over intake channel 
 		select {
 			case <-bb.Progress:
 				bb.SendReport()
@@ -69,7 +73,7 @@ func (bb *BlackBox) SendReport() {
 		bb.Identifier,
 		bb.Successful,
 		bb.Failed,
-		time.Now().Sub(bb.Started) }
+		bb.Rolling.Avarage() }
 }
 
 func (bb *BlackBox) Stop() {
@@ -91,4 +95,5 @@ func (bb *BlackBox) Process(result *Result) {
 	}
 	bb.TotalDuration += result.Duration
 	bb.TotalTransferred += result.Transferred
+	bb.Rolling.Add(result.Duration)
 }
