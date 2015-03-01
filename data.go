@@ -38,7 +38,7 @@ func InitBlackBox(identifier string) *BlackBox {
 	box.Intake = make(chan *Result)
 	box.Progress = make(chan bool, 1)
 	box.Status = make(chan *BoxReport)
-	box.Rolling = InitRollingAvarage(128)
+	box.Rolling = InitRollingAvarage(64)
 	return box
 }
 
