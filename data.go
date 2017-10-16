@@ -28,7 +28,7 @@ type BoxReport struct {
 	Identifier string
 	Successful uint64
 	Failed uint64
-	Avarage time.Duration
+	Average time.Duration
 }
 
 func InitBlackBox(identifier string) *BlackBox {
@@ -64,6 +64,7 @@ func (bb *BlackBox) Start() {
 			case result := <- bb.Intake:
 				if result == nil { return }
 				bb.Process(result)
+			default:
 		}
 	}
 }

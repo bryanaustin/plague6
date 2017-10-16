@@ -20,43 +20,43 @@ type AppConfig struct {
 	Walks []Walk
 }
 
-type Walk struct {
-	Steps []IStep
-}
+// type Walk struct {
+// 	Steps []IStep
+// }
 
-type IStep interface {
-	Compile() error
-	Run() *StepResponse
-}
+// type IStep interface {
+// 	Compile() error
+// 	Run() *StepResponse
+// }
 
-type TrackFile struct {
-	HttpSteps []HttpStep	`xml:"httpstep"`
-	Walks []TrackWalk			`xml:"walk"`
-}
+// type TrackFile struct {
+// 	HttpSteps []HttpStep	`xml:"httpstep"`
+// 	Walks []TrackWalk			`xml:"walk"`
+// }
 
-type TrackWalk struct {
-	Name string 					`xml:"name,attr"`
-	HttpSteps []HttpStep	`xml:"httpstep"`
-}
+// type TrackWalk struct {
+// 	Name string 					`xml:"name,attr"`
+// 	HttpSteps []HttpStep	`xml:"httpstep"`
+// }
 
-type HttpStep struct {
-	Name string 			`xml:"name,attr"`
-	Method string 		`xml:"method,attr"`
-	Url string				`xml:"url,attr"`
-	Headers []Header	`xml:"header"`
-	Body string				`xml:"body"`
-	Request *http.Request
-}
+// type HttpStep struct {
+// 	Name string 			`xml:"name,attr"`
+// 	Method string 		`xml:"method,attr"`
+// 	Url string				`xml:"url,attr"`
+// 	Headers []Header	`xml:"header"`
+// 	Body string				`xml:"body"`
+// 	Request *http.Request
+// }
 
-type Header struct {
-	Name string				`xml:"name,attr"`
-	Value string			`xml:"value,attr"`
-}
+// type Header struct {
+// 	Name string				`xml:"name,attr"`
+// 	Value string			`xml:"value,attr"`
+// }
 
 func ParseArguments() []string {
 	ako.AppConfig = new(AppConfig)
-	flag.BoolVar(&ako.AppConfig.Quiet, "q", false, "supress messages")
-	flag.BoolVar(&ako.AppConfig.Error, "error", false, "increase concurrecny until +50% of requests error")
+	flag.BoolVar(&ako.AppConfig.Quiet, "q", false, "suppress messages")
+	flag.BoolVar(&ako.AppConfig.Error, "break", false, "increase concurrency until +50% of requests error")
 	flag.StringVar(&ako.AppConfig.Listen, "l", "", "listen on this address for instructions")
 	flag.IntVar(&ako.AppConfig.Concurrent, "c", 1, "maximum concurrency")
 	flag.Uint64Var(&ako.AppConfig.Requests, "n", 0, "number of requests to make")

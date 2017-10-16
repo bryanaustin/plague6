@@ -36,8 +36,8 @@ func IntToString(i int) string {
 func PrintStatus(pr *ProgressReport, br *BoxReport) {
 	totalrequests := br.Successful + br.Failed
 	if totalrequests > 0 {
-		fmt.Printf("\rWalk %s: Concurrent: %d, Successful: %d, Failed: %d, Avarage Response: %s         ",
-			pr.Walk, pr.Concurrency, br.Successful, br.Failed, br.Avarage)
+		fmt.Printf("\rWalk %s: Concurrent: %d, Successful: %d, Failed: %d, Average Response: %s         ",
+			pr.Walk, pr.Concurrency, br.Successful, br.Failed, br.Average)
 	} else {
 		fmt.Printf("\rWalk %s: Starting...", pr.Walk)
 	}
