@@ -13,16 +13,22 @@ const (
 	WorkerStateRunning = "run"
 	WorkerStateStopping = "stp"
 	WorkerStateDead = "ded"
+
+	PermitMaxCount = 999
+	PermitMaxTime = time.Duration(time.Second * 30)
 )
 
 type Worker interface {
 	String() string
-	// Connect() (string, error)
-	// Listen() (<-chan string) // TODO: Not going to use string in the long run
-	Concurrency(uint16) error
-	Prepare(configuration.Scenario) error
-	Ready() (<-chan struct{})
-	Permit(uint64, time.Duration) error
-	Stop() error
-	Destroy() error
+	Concurrency(uint16)
+	Prepare(configuration.Scenario)
+	State() (<-chan string)
+	Permit(Permit)
+	Stop()
+	Destroy()
+}
+
+type Permit struct {
+	Time time.Duration
+	Count uint
 }

@@ -2,60 +2,66 @@ package worker
 
 import (
 	"github.com/bryanaustin/plague6/configuration"
-	"time"
 )
 
 type Local struct {
 	// spawners []Spawner
 	scenario chan configuration.Scenario
 	concurrency chan uint16
-	ready chan struct{}
-	state string
+	stateIn chan string
+	stateOut chan string
 }
 
 func NewLocal() (l *Local) {
 	l = new(Local)
 	l.scenario = make(chan configuration.Scenario)
 	l.concurrency = make(chan uint16)
-	l.ready = make(chan struct{})
-	l.state = WorkerStateInit
+	l.stateIn = make(chan string, 4)
+	l.stateOut = make(chan string)
+	go l.stateWatch()
 	go l.main()
 	return
 }
 
 func (l *Local) main() {
 	// Loop though scenarios
+	var concurrent uint16
 	for  {
 		var started bool
-		l.state = WorkerStateIdle
+		l.stateIn <- WorkerStateIdle
 		for {
 			select {
 				//<-scenarioChan
-				//<-concurrencyChan
+				case c := <-l.concurrency:
+					l.spawner.ChangeConcurrecy(c)
 				//<-stateReqChan
 			}
 		}
-		l.state = WorkerStateReady
-		l.ready <- struct{}
+		l.stateIn <- WorkerStateReady
 
 		// Loop though permits
 		for {
-			if started {
-				l.state = WorkerStateRunning
-			} else {
-				l.state = WorkerStateReady
-			}
 			select {
 				//<-stopChan
-				//<-permitChan + started = true
-				//<-doneChan + started = false
+				//<-permitChan + l.stateIn <- WorkerStateRunning
+				//<-doneChan + l.stateIn <- WorkerStateReady or WorkerStateFinishing
 				//<-concurrencyChan
 				//<-stateReqChan
 			}
 		}
 	}
-	close(l.concurrency)
-	close(l.scenario)
+}
+
+func (l *Local) stateWatch() {
+	for {
+		current := WorkerStateInit
+		select {
+			case ns := <-l.stateIn:
+				if ns == "" { return }
+				current = ns
+			case l.stateOut <- current:
+		}
+	}
 }
 
 func (l Local) String() string {
@@ -64,25 +70,30 @@ func (l Local) String() string {
 
 // Prepare is an thread safe method to prepare this worker for a scenario
 func (l *Local) Prepare(s configuration.Scenario) {
-	l.scenario <- s
+	go func(){
+		l.scenario <- s
+	}()
 }
 
-func (l *Local) Ready() (<-chan struct{}) {
-	return l.ready
+func (l *Local) State() (<-chan string) {
+	return l.stateOut
 }
 
-func (l *Local) Concurrency(c uint16) error {
-	return nil
+func (l *Local) Concurrency(c uint16) {
+	go func(){
+		l.concurrency <- c
+	}()
 }
 
-func (l *Local) Permit(n uint64, d time.Duration) error {
-	return nil
+func (l *Local) Permit(p worker.Permit) {
+
 }
 
-func (l *Local) Stop() error {
-	return nil
+func (l *Local) Stop() {
+	// ???
 }
 
 func (l *Local) Destroy() error {
-	return nil
+	close(l.concurrency)
+	close(l.scenario)
 }

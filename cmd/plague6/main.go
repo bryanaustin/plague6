@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/bryanaustin/plague6/configuration"
-	_ "github.com/bryanaustin/plague6/cmd/plague6/orchestration"
+	"github.com/bryanaustin/plague6/cmd/plague6/orchestration"
 	"github.com/bryanaustin/plague6/worker"
 	"io/ioutil"
 	"log"
@@ -26,6 +26,19 @@ func init() {
 }
 
 func main() {
+	checkInputs()
+	config := getConfig()
+	os := perpareOrchestrations(config.Scenarios)
+	cw := configuration.NewWriter(os.Stdout)
+	passConifg(config, cw)
+
+	// Run through scenarios
+	for i, s := range config.Scenarios {
+		runScenario(s, os, ws)
+	}
+}
+
+func checkInputs() {
 	// Check for args
 	if len(os.Args) > 1 {
 		l.Fatal("This program expects no arguments")
@@ -41,7 +54,9 @@ func main() {
 	if (instat.Mode() & os.ModeCharDevice) != 0 {
 		l.Fatal("Plague6 is not getting a configuration from stdin. Exiting.")
 	}
+}
 
+func getConfig() (*configuration.Configuration) {
 	// Read input
 	in, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -67,37 +82,40 @@ func main() {
 		l.Fatalf("Failed to initialize workers: %s", err)
 	}
 
-	// Prepare orchestration
+	return config
+}
 
+func perpareOrchestrations(ss []configuration.Scenarios) (nos []*orchestration.Orchestration) {
+	nos = make([]*orchestration.Orchestration, len(ss))
+	for i := range ss {
+		nos[i] = orchestration.Parse(ss[i])
+	}
+	return
+}
+
+func passConifg(c *configuration.Configuration, cw *configuration.Writer) {
 	// Encode configuration
 	sbconf := new(bytes.Buffer)
 	sconf := gob.Encoder(sbconf)
-	if err := sconf.Encode(config); err != nil {
+	if err := sconf.Encode(c); err != nil {
 		l.Fatalf("Error converting configuration to output format: %s", err)
 	}
 
 	// Output configuration
-	cw := configuration.NewWriter(os.Stdout)
 	cw.Write(configuration.MsgTypeConfig, sbconf.Bytes())
-
-	// Run through scenarios
-	for _, s := range config.Scenarios {
-		runScenario(s, ws)
-	}
 }
 
-func runScenario(s Scenario, wp []worker.Worker) {
+func runScenario(s Scenario, o *orchestration.Orchestration, wp []worker.Worker) {
+	prepScenario(s, wp)
+	// Post worker states and scenario begin
+	// Allocate concurrency & discard unused workers
+}
+
+func prepScenario(s Scenario, wp []worker.Worker) {
 	readyChan := make(chan error)
 	for _, w := range wp {
 		w.Prepare(s)
-		go func(){
-			select {
-				case <-w.Ready():
-					readyChan <- nil
-				case <-time.After(prepareWaitDuration):
-					readyChan <- fmt.Errorf("worker %s, took too long to be ready (%s)", w, prepareWaitDuration)
-			}
-		}()
+		go waitReady(w, readyChan)
 	}
 
 	var errored bool
@@ -111,6 +129,23 @@ func runScenario(s Scenario, wp []worker.Worker) {
 	if errored {
 		os.Exit(2)
 	}
+}
 
-	// Allocate concurrency & discard unused workers
+func waitReady(w worker.Worker, rc chan error) {
+	stateChan := w.State()
+	timeoutChan := time.After(prepareWaitDuration)
+	for {
+		select {
+			case s := <-stateChan:
+				if s == WorkerStateReady{
+					rc <- nil
+					return
+				} else {
+					<-time.After(time.Duration(100) * time.Millisecond)
+				}
+			case <-timeoutChan:
+				rc <- fmt.Errorf("worker %s, took too long to be ready (%s)", w, prepareWaitDuration)
+				return
+		}
+	}
 }

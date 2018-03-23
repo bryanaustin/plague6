@@ -12,7 +12,6 @@ type Writer struct {
 	item chan MsgItem
 }
 
-
 type MsgItem struct {
 	Type string
 	Data []byte
@@ -22,7 +21,6 @@ type MsgHeader struct {
 	Type string
 	Length uint32
 }
-
 
 func NewWriter(cw io.Writer) (w *Writer) {
 	w = new(Writer)
