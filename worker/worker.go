@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"archive.bryanaustin.name/plague6/configuration"
+	"github.com/bryanaustin/plague6/configuration"
 	"time"
 )
 
@@ -16,10 +16,12 @@ const (
 )
 
 type Worker interface {
+	String() string
 	// Connect() (string, error)
 	// Listen() (<-chan string) // TODO: Not going to use string in the long run
-	Prepare(configuration.Scenario) error
 	Concurrency(uint16) error
+	Prepare(configuration.Scenario) error
+	Ready() (<-chan struct{})
 	Permit(uint64, time.Duration) error
 	Stop() error
 	Destroy() error

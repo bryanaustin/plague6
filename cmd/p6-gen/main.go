@@ -1,7 +1,7 @@
 package main
 
 import (
-	"archive.bryanaustin.name/plague6/configuration"
+	"github.com/bryanaustin/plague6/configuration"
 	"encoding/gob"
 	"log"
 	"os"

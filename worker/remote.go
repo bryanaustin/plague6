@@ -1,16 +1,23 @@
 package worker
 
 import (
-	"archive.bryanaustin.name/plague6/configuration"
+	"github.com/bryanaustin/plague6/configuration"
 	"time"
+    "fmt"
 )
 
 type Remote struct {
-	
+	address string
 }
 
 func NewRemote(address string) (r *Remote) {
+    r = new(Remote)
+    r.address = address
 	return
+}
+
+func (r Remote) String() string {
+    return fmt.Sprintf("<remote worker %s>", r.address)
 }
 
 func (r *Remote) Prepare(s configuration.Scenario) {

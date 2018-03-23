@@ -1,14 +1,18 @@
 package main
 
 import (
-	"archive.bryanaustin.name/plague6/configuration"
-	_ "archive.bryanaustin.name/plague6/cmd/plague6/orchestration"
-	"archive.bryanaustin.name/plague6/worker"
+	"github.com/bryanaustin/plague6/configuration"
+	_ "github.com/bryanaustin/plague6/cmd/plague6/orchestration"
+	"github.com/bryanaustin/plague6/worker"
 	"io/ioutil"
 	"log"
 	"os"
 	"bytes"
 	"encoding/gob"
+)
+
+const (
+	prepareWaitDuration = time.Minute
 )
 
 var l *log.Logger
@@ -63,6 +67,8 @@ func main() {
 		l.Fatalf("Failed to initialize workers: %s", err)
 	}
 
+	// Prepare orchestration
+
 	// Encode configuration
 	sbconf := new(bytes.Buffer)
 	sconf := gob.Encoder(sbconf)
@@ -80,13 +86,31 @@ func main() {
 	}
 }
 
-
-func runScenario(s Scenario, ws []worker.Worker) {
-	var wg sync.WaitGroup
-	wg.Add(len(ws))
-	for _, w := range ws {
+func runScenario(s Scenario, wp []worker.Worker) {
+	readyChan := make(chan error)
+	for _, w := range wp {
 		w.Prepare(s)
-		// wg.Done() when ready
+		go func(){
+			select {
+				case <-w.Ready():
+					readyChan <- nil
+				case <-time.After(prepareWaitDuration):
+					readyChan <- fmt.Errorf("worker %s, took too long to be ready (%s)", w, prepareWaitDuration)
+			}
+		}()
 	}
-	wg.Wait()
+
+	var errored bool
+	for range wp {
+		if rr := <-readyChan; rr != nil {
+			l.Error("Problem while the workers were preparing: " + rr.String())
+			errored = true
+		}
+	}
+
+	if errored {
+		os.Exit(2)
+	}
+
+	// Allocate concurrency & discard unused workers
 }

@@ -34,6 +34,7 @@ type WorkerLocal struct{}
 // Scenario one of possibly multiple tests to run
 type Scenario struct {
 	Description   string
+	Concurrency   uint16
 	Requests      []Request
 	Probabilities []float32
 	Orchestration

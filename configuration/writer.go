@@ -1,7 +1,6 @@
 package configuration
 
 import (
-	"bytes"
 	"io"
 	"encoding/gob"
 )
@@ -9,7 +8,7 @@ import (
 type Writer struct {
 	closed bool
 	write io.Writer
-	enc gob.Encoder
+	enc *gob.Encoder
 	item chan MsgItem
 }
 
@@ -27,8 +26,8 @@ type MsgHeader struct {
 
 func NewWriter(cw io.Writer) (w *Writer) {
 	w = new(Writer)
-	w.writer = cw
-	w.enc = gob.NewEncoder(w.writer)
+	w.write = cw
+	w.enc = gob.NewEncoder(w.write)
 	w.item = make(chan MsgItem)
 	go func() {
 		for i := range w.item {
@@ -41,4 +40,5 @@ func NewWriter(cw io.Writer) (w *Writer) {
 
 func (w *Writer) Write(mi MsgItem) error {
 	w.item <- mi
+	return nil
 }
