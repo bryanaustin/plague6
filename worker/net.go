@@ -28,8 +28,9 @@ func ConnectWorker(w interface{}) (nw Worker, err error) {
 		case configuration.WorkerLocal:
 			nw = NewLocal()
 		case configuration.WorkerRemote:
-			rc := w.(configuration.WorkerRemote)
-			nw =  NewRemote(rc.Address)
+			// rc := w.(configuration.WorkerRemote)
+			// nw =  NewRemote(rc.Address)
+			err = errors.New("Remote worker not implemented")
 		default:
 			err = UnknownWorkerType
 	}

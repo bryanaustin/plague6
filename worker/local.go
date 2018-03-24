@@ -33,7 +33,8 @@ func (l *Local) main() {
 			select {
 				//<-scenarioChan
 				case c := <-l.concurrency:
-					l.spawner.ChangeConcurrecy(c)
+					
+					// l.spawner.ChangeConcurrecy(c)
 				//<-stateReqChan
 			}
 		}
@@ -85,7 +86,7 @@ func (l *Local) Concurrency(c uint16) {
 	}()
 }
 
-func (l *Local) Permit(p worker.Permit) {
+func (l *Local) Permit(p Permit) {
 
 }
 
@@ -93,7 +94,7 @@ func (l *Local) Stop() {
 	// ???
 }
 
-func (l *Local) Destroy() error {
+func (l *Local) Destroy() {
 	close(l.concurrency)
 	close(l.scenario)
 }
