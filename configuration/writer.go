@@ -1,15 +1,15 @@
 package configuration
 
 import (
-	"io"
 	"encoding/gob"
+	"io"
 )
 
 type Writer struct {
 	closed bool
-	write io.Writer
-	enc *gob.Encoder
-	item chan MsgItem
+	write  io.Writer
+	enc    *gob.Encoder
+	item   chan MsgItem
 }
 
 type MsgItem struct {
@@ -18,7 +18,7 @@ type MsgItem struct {
 }
 
 type MsgHeader struct {
-	Type string
+	Type   string
 	Length uint32
 }
 
@@ -29,7 +29,7 @@ func NewWriter(cw io.Writer) (w *Writer) {
 	w.item = make(chan MsgItem)
 	go func() {
 		for i := range w.item {
-			w.enc.Encode(MsgHeader{ Type:i.Type, Length:uint32(len(i.Data)) })
+			w.enc.Encode(MsgHeader{Type: i.Type, Length: uint32(len(i.Data))})
 			w.write.Write(i.Data)
 		}
 	}()

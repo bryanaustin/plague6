@@ -1,14 +1,16 @@
 package main
 
 import (
-	"github.com/bryanaustin/plague6/configuration"
+	"bytes"
+	"encoding/gob"
+	"fmt"
 	"github.com/bryanaustin/plague6/cmd/plague6/orchestration"
+	"github.com/bryanaustin/plague6/configuration"
 	"github.com/bryanaustin/plague6/worker"
 	"io/ioutil"
 	"log"
 	"os"
-	"bytes"
-	"encoding/gob"
+	"time"
 )
 
 const (
@@ -27,14 +29,15 @@ func init() {
 
 func main() {
 	checkInputs()
-	config := getConfig()
-	os := perpareOrchestrations(config.Scenarios)
+	config, wp := getConfig()
+	orch := perpareOrchestrations(config.Scenarios)
 	cw := configuration.NewWriter(os.Stdout)
 	passConifg(config, cw)
+	//ConnectWorkers
 
 	// Run through scenarios
 	for i, s := range config.Scenarios {
-		runScenario(s, os, ws)
+		runScenario(s, orch[i], wp)
 	}
 }
 
@@ -56,7 +59,7 @@ func checkInputs() {
 	}
 }
 
-func getConfig() (*configuration.Configuration) {
+func getConfig() (*configuration.Configuration, []worker.Worker) {
 	// Read input
 	in, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -82,13 +85,13 @@ func getConfig() (*configuration.Configuration) {
 		l.Fatalf("Failed to initialize workers: %s", err)
 	}
 
-	return config
+	return config, ws
 }
 
-func perpareOrchestrations(ss []configuration.Scenarios) (nos []*orchestration.Orchestration) {
-	nos = make([]*orchestration.Orchestration, len(ss))
+func perpareOrchestrations(ss []*configuration.Scenario) (nos []orchestration.Orchestration) {
+	nos = make([]orchestration.Orchestration, len(ss))
 	for i := range ss {
-		nos[i] = orchestration.Parse(ss[i])
+		nos[i] = orchestration.Parse(ss[i].Orchestration)
 	}
 	return
 }
@@ -96,22 +99,28 @@ func perpareOrchestrations(ss []configuration.Scenarios) (nos []*orchestration.O
 func passConifg(c *configuration.Configuration, cw *configuration.Writer) {
 	// Encode configuration
 	sbconf := new(bytes.Buffer)
-	sconf := gob.Encoder(sbconf)
+	sconf := gob.NewEncoder(sbconf)
 	if err := sconf.Encode(c); err != nil {
 		l.Fatalf("Error converting configuration to output format: %s", err)
 	}
 
 	// Output configuration
-	cw.Write(configuration.MsgTypeConfig, sbconf.Bytes())
+	cw.Write(configuration.MsgItem{configuration.MsgTypeConfig, sbconf.Bytes()})
 }
 
-func runScenario(s Scenario, o *orchestration.Orchestration, wp []worker.Worker) {
+func runScenario(s *configuration.Scenario, o orchestration.Orchestration, wp []worker.Worker) {
 	prepScenario(s, wp)
 	// Post worker states and scenario begin
-	// Allocate concurrency & discard unused workers
+	if s.Concurrency < uint16(len(wp)) {
+		wp = wp[:s.Concurrency]
+		for _, w := range wp {
+			w.Concurrency(1)
+		}
+		// Note about unused scenerios
+	}
 }
 
-func prepScenario(s Scenario, wp []worker.Worker) {
+func prepScenario(s *configuration.Scenario, wp []worker.Worker) {
 	readyChan := make(chan error)
 	for _, w := range wp {
 		w.Prepare(s)
@@ -121,7 +130,7 @@ func prepScenario(s Scenario, wp []worker.Worker) {
 	var errored bool
 	for range wp {
 		if rr := <-readyChan; rr != nil {
-			l.Error("Problem while the workers were preparing: " + rr.String())
+			l.Print("Problem while the workers were preparing: " + rr.Error())
 			errored = true
 		}
 	}
@@ -136,16 +145,16 @@ func waitReady(w worker.Worker, rc chan error) {
 	timeoutChan := time.After(prepareWaitDuration)
 	for {
 		select {
-			case s := <-stateChan:
-				if s == WorkerStateReady{
-					rc <- nil
-					return
-				} else {
-					<-time.After(time.Duration(100) * time.Millisecond)
-				}
-			case <-timeoutChan:
-				rc <- fmt.Errorf("worker %s, took too long to be ready (%s)", w, prepareWaitDuration)
+		case s := <-stateChan:
+			if s == worker.WorkerStateReady {
+				rc <- nil
 				return
+			} else {
+				<-time.After(time.Duration(100) * time.Millisecond)
+			}
+		case <-timeoutChan:
+			rc <- fmt.Errorf("worker %s, took too long to be ready (%s)", w, prepareWaitDuration)
+			return
 		}
 	}
 }
