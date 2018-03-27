@@ -13,7 +13,7 @@ var (
 	UnknownWorkerType = errors.New("unknown worker type")
 )
 
-func ConnectWorkers(ws []interface{}) (nws []Worker, ferr error) {
+func ConnectWorkers(ws []*configuration.Worker) (nws []Worker, ferr error) {
 	nws = make([]Worker, len(ws))
 	for i := range nws {
 		nw, err := ConnectWorker(ws[i])
@@ -26,11 +26,11 @@ func ConnectWorkers(ws []interface{}) (nws []Worker, ferr error) {
 	return
 }
 
-func ConnectWorker(w interface{}) (nw Worker, err error) {
-	switch w.(type) {
-	case configuration.WorkerLocal:
+func ConnectWorker(w *configuration.Worker) (nw Worker, err error) {
+	switch w.Type {
+	case configuration.WorkerTypeLocal:
 		nw = NewLocal()
-	case configuration.WorkerRemote:
+	case configuration.WorkerTypeRemote:
 		// rc := w.(configuration.WorkerRemote)
 		// nw =  NewRemote(rc.Address)
 		err = errors.New("Remote worker not implemented")

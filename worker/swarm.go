@@ -21,6 +21,7 @@ type FlyResult struct {
 	Started, Finished time.Time
 	ErrorType         string
 	BodySize          uint
+	Next              *FlyResult
 }
 
 type LocustRequest struct {

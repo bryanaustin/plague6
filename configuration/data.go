@@ -9,28 +9,28 @@ const (
 	HeaderAdd   = "add"
 	HeaderClear = "clr"
 	HeaderSet   = "set"
+
+	OrchestrationTypeStatic = ""
+	OrchestrationTypeError  = "oer"
+	OrchestrationTypeResp   = "rep"
+
+	WorkerTypeLocal = ""
+	WorkerTypeRemote = "rmt"
 )
 
-type Orchestration interface {
-	Description() string
-}
-
-type StaticOrchestrationConfig struct {
-	Time  time.Duration
-	Count uint64
-}
-
-type DynamicOrchestrationConfig struct {
+type Orchestration struct {
+	Description  string
+	Type         string
+	Time         time.Duration
+	Count        uint64
 	ErrorRate    float32
 	ResponseTime time.Duration
 }
 
-// Worker is a satellite that can increase load/bandwidth
-type WorkerRemote struct {
+type Worker struct {
+	Type string
 	Address string
 }
-
-type WorkerLocal struct{}
 
 // Scenario one of possibly multiple tests to run
 type Scenario struct {
@@ -61,14 +61,14 @@ type HeaderChange struct {
 // Configuration is all information about what this run is supposed to do
 type Configuration struct {
 	//workerLookup map[string]worker // Is this needed?
-	Workers   []interface{}
+	Workers   []*Worker
 	Scenarios []*Scenario
 }
 
 // New will create a new configuration
 func New() (c *Configuration) {
 	c = new(Configuration)
-	c.Workers = make([]interface{}, 0, 1)
+	c.Workers = make([]*Worker, 0, 1)
 	c.Scenarios = make([]*Scenario, 0, 1)
 	return
 }

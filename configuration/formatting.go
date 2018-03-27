@@ -1,10 +1,10 @@
 package configuration
 
 import (
-	"fmt"
-	"time"
+	// "fmt"
+	// "time"
 )
-
+/*
 func (soc StaticOrchestrationConfig) Description() string {
 	if soc.Count == uint64(0) {
 		if soc.Time == time.Duration(0) {
@@ -32,3 +32,4 @@ func (doc DynamicOrchestrationConfig) Description() string {
 
 	return fmt.Sprintf("Send requests until the error rate is %s or higher", doc.ErrorRate)
 }
+*/

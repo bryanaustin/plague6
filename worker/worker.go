@@ -22,13 +22,20 @@ type Worker interface {
 	String() string
 	Concurrency(uint16)
 	Prepare(*configuration.Scenario)
-	State() <-chan string
-	Permit(Permit)
+	State() (<-chan string)
+	Permit(*Permit)
 	Stop()
+	Done() (<-chan *FlyResult)
 	Destroy()
+	Messages() (<-chan interface{})
+	Warn() (<-chan struct{})
 }
 
 type Permit struct {
 	Time  time.Duration
 	Count uint64
+}
+
+type Stats struct {
+	Success, Fail uint64
 }

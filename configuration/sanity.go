@@ -9,7 +9,7 @@ import (
 // Solidify does any preprocessing on inputs (such as distribution)
 func (c *Configuration) Solidify() {
 	if len(c.Workers) < 1 {
-		c.Workers = append(c.Workers, new(WorkerLocal))
+		c.Workers = append(c.Workers, &Worker{ Type:WorkerTypeLocal })
 	}
 
 	for _, s := range c.Scenarios {
@@ -34,7 +34,7 @@ func (c *Configuration) Solidify() {
 }
 
 // SanityCheck will make sure the config isn't crazy
-func (c Configuration) SanityCheck() error {
+func (c *Configuration) SanityCheck() error {
 
 	if len(c.Scenarios) < 1 {
 		return errors.New("No scenarios, nothing to do")
@@ -66,15 +66,15 @@ func (c Configuration) SanityCheck() error {
 		}
 
 		for ri, r := range s.Requests {
-			if r.URL != "" {
+			if r.URL == "" {
 				return fmt.Errorf("scenario %d, request %d doesn't have a url", si, ri)
 			}
 
 			var err error
-			if r.ParsedURL, err = url.Parse(r.URL); err != nil {
+			if c.Scenarios[si].Requests[ri].ParsedURL, err = url.Parse(r.URL); err != nil {
 				return fmt.Errorf("url (%s) in scenario %d, request %d failed to parse: %s", r.URL, si, ri, err)
 			}
-
+			// fmt.Errorf("URL: %s", c.Scenarios[si].Requests[ri].ParsedURL)
 		}
 	}
 

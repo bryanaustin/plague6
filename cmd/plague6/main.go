@@ -17,7 +17,20 @@ const (
 	prepareWaitDuration = time.Minute
 )
 
+type WorkerMessage struct {
+	Id int
+	worker.Worker
+	Message interface{}
+}
+
+type WorkerStats struct {
+	Id int
+	worker.Worker
+	worker.Stats
+}
+
 var l *log.Logger
+var cw *configuration.Writer
 
 func init() {
 	identifier := "plague6"
@@ -31,9 +44,11 @@ func main() {
 	checkInputs()
 	config, wp := getConfig()
 	orch := perpareOrchestrations(config.Scenarios)
-	cw := configuration.NewWriter(os.Stdout)
-	passConifg(config, cw)
-	//ConnectWorkers
+	for i := range orch {
+		config.Scenarios[i].Orchestration.Description = orch[i].Describe()
+	}
+	cw = configuration.NewWriter(os.Stdout)
+	passConifg(config)
 
 	// Run through scenarios
 	for i, s := range config.Scenarios {
@@ -72,7 +87,7 @@ func getConfig() (*configuration.Configuration, []worker.Worker) {
 	if err := dec.Decode(config); err != nil {
 		l.Fatalf("Error parsing configuration file: %s", err)
 	}
-
+	
 	// Make sure there is nothing wrong with the configs
 	if err := config.SanityCheck(); err != nil {
 		l.Fatalf("Configuration sanity check failed: %s", err)
@@ -96,27 +111,101 @@ func perpareOrchestrations(ss []*configuration.Scenario) (nos []orchestration.Or
 	return
 }
 
-func passConifg(c *configuration.Configuration, cw *configuration.Writer) {
-	// Encode configuration
-	sbconf := new(bytes.Buffer)
-	sconf := gob.NewEncoder(sbconf)
-	if err := sconf.Encode(c); err != nil {
+func passConifg(c *configuration.Configuration) {
+	if err := cw.WriteObj(c, configuration.MsgTypeConfig); err != nil {
 		l.Fatalf("Error converting configuration to output format: %s", err)
 	}
-
-	// Output configuration
-	cw.Write(configuration.MsgItem{configuration.MsgTypeConfig, sbconf.Bytes()})
 }
 
 func runScenario(s *configuration.Scenario, o orchestration.Orchestration, wp []worker.Worker) {
-	prepScenario(s, wp)
+	wpcopy := wp[:]
+	prepScenario(s, wpcopy)
 	// Post worker states and scenario begin
-	if s.Concurrency < uint16(len(wp)) {
-		wp = wp[:s.Concurrency]
-		for _, w := range wp {
+
+	// l.Print("Pre concurrency")
+	if s.Concurrency < uint16(len(wpcopy)) {
+		wpcopy = wpcopy[:s.Concurrency]
+		// l.Print("Worker pool: %+v", wpcopy)
+		for _, w := range wpcopy {
+			// l.Print("Worker: %+v", w)
 			w.Concurrency(1)
 		}
 		// Note about unused scenerios
+	} else {
+		remaning := s.Concurrency
+		each := s.Concurrency / uint16(len(wpcopy))
+		for i := 0; i < len(wpcopy) - 1; i ++ {
+			remaning -= each
+			wpcopy[i].Concurrency(each)
+		}
+		wpcopy[len(wpcopy) - 1].Concurrency(remaning)
+	}
+
+	wrkwarn := make(chan worker.Worker)
+	wrkmsg := make(chan WorkerMessage)
+	wrkdone := make(chan struct{})
+	active := len(wpcopy)
+	allo := o.InitalAllocation(active)
+	// l.Printf("Initial allocation: %+v", allo)
+	for i, w := range wp {
+		// l.Printf("Initial allocation worker: %+v", allo[i])
+		// l.Printf("O continue: %s", o.Continue())
+		go func() {
+			for {
+				<-w.Warn()
+				wrkwarn <- w
+			}
+		}()
+		go func(){
+			for {
+				m := <-w.Messages()
+				wrkmsg <- WorkerMessage{ Id:i, Worker:w, Message:m }
+			}
+		}()
+		go func() {
+			fr := <-w.Done()
+			for ; fr != nil; fr = fr.Next {
+				hit := configuration.Hit{ Id:i, Started:fr.Started, Finished:fr.Finished,
+					BodySize:fr.BodySize, ErrorType:fr.ErrorType }
+				if err := cw.WriteObj(hit, configuration.MsgTypeHit); err != nil {
+					l.Print("Error writing hit: %s", err)
+				}
+			}
+			wrkdone <- struct{}{}
+		}()
+		w.Permit(allo[i])
+	}
+
+	for o.Continue() || active > 0 {
+		select {
+			case <-wrkdone:
+				active--
+
+			case w := <-wrkwarn:
+				if p := o.SingleAllocation(); p != nil {
+					w.Permit(p)
+				}
+
+			case m := <-wrkmsg:
+				switch m.Message.(type) {
+				case *worker.Stats:
+					s := m.Message.(*worker.Stats)
+					stats := configuration.WorkerStats{ Id:m.Id, Success:s.Success, Fail:s.Fail }
+					if err := cw.WriteObj(stats, configuration.MsgTypeWorkerStats); err != nil {
+						l.Print("Error writing stats: %s", err)
+					}
+
+				case *configuration.DebugMessage:
+					dm := m.Message.(*configuration.DebugMessage)
+					dm.Id = m.Id
+					if err := cw.WriteObj(dm, configuration.MsgTypeDebugMessage); err != nil {
+						l.Print("Error writing debug message: %s", err)
+					}
+
+				default:
+					l.Printf("Unknown worker message: %+v", m.Message)
+				}
+		}
 	}
 }
 
@@ -150,7 +239,7 @@ func waitReady(w worker.Worker, rc chan error) {
 				rc <- nil
 				return
 			} else {
-				<-time.After(time.Duration(100) * time.Millisecond)
+				time.Sleep(time.Duration(100) * time.Millisecond)
 			}
 		case <-timeoutChan:
 			rc <- fmt.Errorf("worker %s, took too long to be ready (%s)", w, prepareWaitDuration)

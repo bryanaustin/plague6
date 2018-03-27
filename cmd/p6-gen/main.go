@@ -24,11 +24,15 @@ func main() {
 
 	c := configuration.New()
 	r := &configuration.Request{ URL:os.Args[1] }
-	s := &configuration.Scenario{Description: "This is a desc",
+	s1 := &configuration.Scenario{ Description: "First",
 		Concurrency: 1,
-		Orchestration: &configuration.StaticOrchestrationConfig{ Count: 10 },
+		Orchestration: configuration.Orchestration{  Count: 3 },
 		Requests:[]*configuration.Request{r}}
-	c.Scenarios = append(c.Scenarios, s)
+	s2 := &configuration.Scenario{ Description: "Second",
+		Concurrency: 3,
+		Orchestration: configuration.Orchestration{  Count: 6 },
+		Requests:[]*configuration.Request{r}}
+	c.Scenarios = append(c.Scenarios, s1, s2)
 	enc := gob.NewEncoder(os.Stdout)
 	if err := enc.Encode(c); err != nil {
 		l.Fatalf("Error encoding configuration: %s", err)
